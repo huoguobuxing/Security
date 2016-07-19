@@ -3,23 +3,31 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http.Authentication;
 using Microsoft.AspNetCore.Http.Features.Authentication;
 
 namespace Microsoft.AspNetCore.Authentication
 {
+    /// <summary>
+    /// Extensions methods for AuthenticationToken
+    /// </summary>
     public static class AuthenticationTokenExtensions
     {
         private static string TokenNamesKey = ".TokenNames";
         private static string TokenKeyPrefix = ".Token.";
 
+        /// <summary>
+        /// Add new AuthenticationTokens while removing the old ones
+        /// </summary>
         public static void StoreTokens(this AuthenticationProperties properties, IEnumerable<AuthenticationToken> tokens)
         {
             if (properties == null)
             {
                 throw new ArgumentNullException(nameof(properties));
             }
+
             if (tokens == null)
             {
                 throw new ArgumentNullException(nameof(tokens));
@@ -33,36 +41,43 @@ namespace Microsoft.AspNetCore.Authentication
             }
             properties.Items.Remove(TokenNamesKey);
 
-            var tokenNames = new List<string>();
+            var tokenNames = new List<string>(tokens.Count());
             foreach (var token in tokens)
             {
                 // REVIEW: should probably check that there are no ; in the token name and throw or encode
                 tokenNames.Add(token.Name);
-                properties.Items[TokenKeyPrefix+token.Name] = token.Value;
+                properties.Items[TokenKeyPrefix + token.Name] = token.Value;
             }
+
             if (tokenNames.Count > 0)
             {
-                properties.Items[TokenNamesKey] = string.Join(";", tokenNames.ToArray());
+                properties.Items[TokenNamesKey] = string.Join(";", tokenNames);
             }
         }
 
+        /// <summary>
+        /// Returns the value of the AuthenticationToken of given token name
+        /// </summary>
         public static string GetTokenValue(this AuthenticationProperties properties, string tokenName)
         {
             if (properties == null)
             {
                 throw new ArgumentNullException(nameof(properties));
             }
+
             if (tokenName == null)
             {
                 throw new ArgumentNullException(nameof(tokenName));
             }
 
             var tokenKey = TokenKeyPrefix + tokenName;
-            return properties.Items.ContainsKey(tokenKey)
-                ? properties.Items[tokenKey]
-                : null;
+            string tokenValue;
+            return properties.Items.TryGetValue(tokenKey, out tokenValue) ? tokenValue : null;
         }
 
+        /// <summary>
+        /// Returns AuthenticationToken
+        /// </summary>
         public static IEnumerable<AuthenticationToken> GetTokens(this AuthenticationProperties properties)
         {
             if (properties == null)
@@ -70,10 +85,12 @@ namespace Microsoft.AspNetCore.Authentication
                 throw new ArgumentNullException(nameof(properties));
             }
 
-            var tokens = new List<AuthenticationToken>();
-            if (properties.Items.ContainsKey(TokenNamesKey))
+
+            string tokenValues;
+            if (properties.Items.TryGetValue(TokenNamesKey, out tokenValues))
             {
-                var tokenNames = properties.Items[TokenNamesKey].Split(';');
+                var tokenNames = tokenValues.Split(';');
+                var tokens = new List<AuthenticationToken>(tokenNames.Length);
                 foreach (var name in tokenNames)
                 {
                     var token = properties.GetTokenValue(name);
@@ -82,26 +99,38 @@ namespace Microsoft.AspNetCore.Authentication
                         tokens.Add(new AuthenticationToken { Name = name, Value = token });
                     }
                 }
-            }
 
-            return tokens;
+                return tokens;
+            }
+            else
+            {
+                return Enumerable.Empty<AuthenticationToken>();
+            }
         }
 
+        /// <summary>
+        /// Returns AuthenticationToken asynchronisedly from AuthenticationManager
+        /// </summary>
         public static Task<string> GetTokenAsync(this AuthenticationManager manager, string tokenName)
         {
             return manager.GetTokenAsync(AuthenticationManager.AutomaticScheme, tokenName);
         }
 
+        /// <summary>
+        /// Returns AuthenticationToken asynchronisedly from AuthenticationManager
+        /// </summary>
         public static async Task<string> GetTokenAsync(this AuthenticationManager manager, string signInScheme, string tokenName)
         {
             if (manager == null)
             {
                 throw new ArgumentNullException(nameof(manager));
             }
+
             if (signInScheme == null)
             {
                 throw new ArgumentNullException(nameof(signInScheme));
             }
+
             if (tokenName == null)
             {
                 throw new ArgumentNullException(nameof(tokenName));

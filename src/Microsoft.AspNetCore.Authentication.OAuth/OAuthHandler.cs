@@ -18,15 +18,27 @@ using Newtonsoft.Json.Linq;
 
 namespace Microsoft.AspNetCore.Authentication.OAuth
 {
+    /// <summary>
+    /// OAuth authentication handler
+    /// </summary>
     public class OAuthHandler<TOptions> : RemoteAuthenticationHandler<TOptions> where TOptions : OAuthOptions
     {
+        /// <summary>
+        /// Constructs a OAuthHandler
+        /// </summary>
         public OAuthHandler(HttpClient backchannel)
         {
             Backchannel = backchannel;
         }
 
+        /// <summary>
+        /// HttpClient for server to server communication with identity provider
+        /// </summary>
         protected HttpClient Backchannel { get; private set; }
 
+        /// <summary>
+        /// Handle the remote authentication
+        /// </summary>
         protected override async Task<AuthenticateResult> HandleRemoteAuthenticateAsync()
         {
             AuthenticationProperties properties = null;
@@ -35,26 +47,24 @@ namespace Microsoft.AspNetCore.Authentication.OAuth
             var error = query["error"];
             if (!StringValues.IsNullOrEmpty(error))
             {
-                var failureMessage = new StringBuilder();
-                failureMessage.Append(error);
+                var failureMessage = new StringBuilder(error);
+
                 var errorDescription = query["error_description"];
                 if (!StringValues.IsNullOrEmpty(errorDescription))
                 {
-                    failureMessage.Append(";Description=").Append(errorDescription);
+                    failureMessage.Append($";Description={errorDescription}");
                 }
+
                 var errorUri = query["error_uri"];
                 if (!StringValues.IsNullOrEmpty(errorUri))
                 {
-                    failureMessage.Append(";Uri=").Append(errorUri);
+                    failureMessage.Append($";Uri={errorUri}");
                 }
 
                 return AuthenticateResult.Fail(failureMessage.ToString());
             }
 
-            var code = query["code"];
-            var state = query["state"];
-
-            properties = Options.StateDataFormat.Unprotect(state);
+            properties = Options.StateDataFormat.Unprotect(query["state"]);
             if (properties == null)
             {
                 return AuthenticateResult.Fail("The oauth state was missing or invalid.");
@@ -66,13 +76,13 @@ namespace Microsoft.AspNetCore.Authentication.OAuth
                 return AuthenticateResult.Fail("Correlation failed.");
             }
 
+            var code = query["code"];
             if (StringValues.IsNullOrEmpty(code))
             {
                 return AuthenticateResult.Fail("Code was not found.");
             }
 
             var tokens = await ExchangeCodeAsync(code, BuildRedirectUri(Options.CallbackPath));
-
             if (tokens.Error != null)
             {
                 return AuthenticateResult.Fail(tokens.Error);
@@ -122,6 +132,9 @@ namespace Microsoft.AspNetCore.Authentication.OAuth
             return AuthenticateResult.Success(await CreateTicketAsync(identity, properties, tokens));
         }
 
+        /// <summary>
+        /// Exchange authorization code for access token
+        /// </summary>
         protected virtual async Task<OAuthTokenResponse> ExchangeCodeAsync(string code, string redirectUri)
         {
             var tokenRequestParameters = new Dictionary<string, string>()
