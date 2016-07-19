@@ -129,7 +129,15 @@ namespace Microsoft.AspNetCore.Authentication.OAuth
                 properties.StoreTokens(authTokens);
             }
 
-            return AuthenticateResult.Success(await CreateTicketAsync(identity, properties, tokens));
+            try
+            {
+                var ticket = await CreateTicketAsync(identity, properties, tokens);
+                return AuthenticateResult.Success(ticket);
+            }
+            catch(Exception ex)
+            {
+                return AuthenticateResult.Fail(ex);
+            }
         }
 
         /// <summary>
